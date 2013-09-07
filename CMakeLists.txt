@@ -4,6 +4,10 @@ PROJECT( "haruna" )
 LIST( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake" )
 INCLUDE( pch_support )
 INCLUDE( compiler_option )
+INCLUDE( cxx_flag_overrides )
+INCLUDE( c_flag_overrides )
+
+FIND_PACKAGE(OpenCV REQUIRED)
 
 if(UNIX)
 	#SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++11" )
@@ -120,3 +124,5 @@ TARGET_LINK_LIBRARIES( haruna_exe
 #########################################################
 
 USE_CPP11( TARGET haruna haruna_exe )
+
+TARGET_LINK_LIBRARIES(haruna_exe ${OpenCV_LIBS})
