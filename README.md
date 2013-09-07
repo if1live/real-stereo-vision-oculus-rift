@@ -1,4 +1,4 @@
-# OpenCV + Oculus Rift
+# Real Stereo Vision with Oculus Rift
 두개의 카메라의 입력을 그대로 Oculus Rift로 보내는 프로그램이다. 캡쳐한 이미지를 후처리하는 것을 구현까지 구현했다.
 
 ![no effect](https://raw.github.com/shipduck/haruna/master/document/no_effect.jpg)
