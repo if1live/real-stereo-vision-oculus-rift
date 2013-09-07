@@ -9,11 +9,6 @@ INCLUDE( c_flag_overrides )
 
 FIND_PACKAGE(OpenCV REQUIRED)
 
-if(UNIX)
-	#SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++11" )
-	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -lX11 -lXxf86vm -lpthread -lXrandr -lXi" )
-endif()
-
 OPTION( AUTO_DOWNLOAD_EXT "When needed external library is not found, Automatically download it." OFF )
 OPTION( SUBMODULE_UPDATE "Try to update submodules" ON )
 
@@ -56,6 +51,10 @@ APPEND_LINK_LIBS( libglew_shared )
 # Add glfw
 SET( GLFW_BUILD_EXAMPLES OFF )
 SET( GLFW_BUILD_TESTS OFF  )
+IF( APPLE )
+	SET(_GLFW_COCOA ON)
+	SET(_GLFW_NSGL ON)
+ENDIF(  )
 ADD_SUBDIRECTORY ( ${HARUNA_EXT_DIR}/glfw )
 INCLUDE_DIRECTORIES( ${HARUNA_EXT_DIR}/glfw/include )
 APPEND_LINK_LIBS( glfw )
@@ -84,7 +83,7 @@ APPEND_LINK_LIBS( ${GL_LIBRARY} )
 
 #########################################################
 
-FILE( GLOB SORA_SRC_FILES 
+FILE( GLOB SORA_SRC_FILES
 	"${SORA_SRC_DIR}/*.*" )
 FILE( GLOB HARUNA_SRC_FILES "${HARUNA_SRC_DIR}/*.*" )
 FILE( GLOB HARUNA_GL_SRC_FILES "${HARUNA_SRC_DIR}/gl/*.*" )
@@ -97,12 +96,14 @@ FILE( GLOB PCH_SRC_FILES
 
 #########################################################
 
-ADD_LIBRARY( haruna 
+ADD_LIBRARY( haruna
 	${PCH_SRC_FILES}
-	${SORA_SRC_FILES} 	
-	${HARUNA_SRC_FILES} 
+	${SORA_SRC_FILES}
+	${HARUNA_SRC_FILES}
 	${HARUNA_GL_SRC_FILES} )
-	
+
+TARGET_LINK_LIBRARIES( haruna ${HARUNA_LINK_LIBS} )
+
 MSVC_SET_PCH( haruna ${PCH_SRC_FILES} )
 
 SOURCE_GROUP( "" FILES ${PCH_SRC_FILES} )
@@ -112,14 +113,12 @@ SOURCE_GROUP( haruna\\gl FILES ${HARUNA_GL_SRC_FILES} )
 
 #########################################################
 
-ADD_EXECUTABLE( haruna_exe 
+ADD_EXECUTABLE( haruna_exe
 	${HARUNA_EXE_SRC_FILES} )
-	
+
 SOURCE_GROUP( "" FILES ${HARUNA_EXE_SRC_FILES} )
 
-TARGET_LINK_LIBRARIES( haruna_exe
-	${HARUNA_LINK_LIBS}
-	haruna )
+TARGET_LINK_LIBRARIES( haruna_exe haruna )
 
 #########################################################
 
