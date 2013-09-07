@@ -12,8 +12,7 @@ public:
 
 private:
 	std::unique_ptr<haruna::gl::ShaderProgram> prog_;
-	std::unique_ptr<haruna::gl::Texture2D> tex_;
-	
-	float y_rot_;
+	std::unique_ptr<haruna::gl::Texture2D> left_tex_;
+	std::unique_ptr<haruna::gl::Texture2D> right_tex_;
 };
 

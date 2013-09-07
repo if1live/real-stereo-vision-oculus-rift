@@ -24,19 +24,20 @@
 
 
 //init camera
-cv::VideoCapture cap;
-cv::Mat frame;
-cv::Mat image;
-
+cv::VideoCapture left_cap;
+cv::VideoCapture right_cap;
+cv::Mat left_frame;
+cv::Mat right_frame;
 
 Texture2DMapping::Texture2DMapping(float width, float height)
-	: AbstractLogic(width, height), y_rot_(0)
+	: AbstractLogic(width, height)
 {
 }
 
 Texture2DMapping::~Texture2DMapping()
 {
-	tex_->Deinit();
+	left_tex_->Deinit();
+	right_tex_->Deinit();
 	prog_->Deinit();
 }
 
@@ -69,45 +70,63 @@ bool Texture2DMapping::Init()
 	}
 
     //opencv
-    cap.open(0);
+    left_cap.open(0);
+	right_cap.open(1);
+	int frame_width = 480;
+	int frame_height = 320;
+	left_cap.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
+	left_cap.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
+	right_cap.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
+	right_cap.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
 
 	//create texture
-    GLuint tex_id = 0;
-    glGenTextures(1, &tex_id);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glBindTexture(GL_TEXTURE_2D, tex_id);
-    cap >> frame;
-    if( !frame.empty() ) {
-        frame.copyTo(image);
-    }
-    glBindTexture(GL_TEXTURE_2D, tex_id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, GL_RGB, GL_UNSIGNED_BYTE, image.data);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	for(int i = 0 ; i < 2 ; ++i) {
+		GLuint tex_id = 0;
+		glGenTextures(1, &tex_id);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glBindTexture(GL_TEXTURE_2D, tex_id);
 
-	tex_.reset(new haruna::gl::Texture2D());
-    bool tex_init_result = tex_->Init(tex_id, image.cols, image.rows);
-	if(!tex_init_result) {
-		return false;
+		cv::Mat *frame = nullptr;
+		if(i == 0) {
+			left_cap >> left_frame;
+			frame = &left_frame;
+		} else {
+			right_cap >> right_frame;
+			frame = &right_frame;
+		}
+
+		glBindTexture(GL_TEXTURE_2D, tex_id);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+		bool tex_init_result = false;
+		if(i == 0) {
+			left_tex_.reset(new haruna::gl::Texture2D());
+			tex_init_result = left_tex_->Init(tex_id, frame->cols, frame->rows);
+		} else {
+			right_tex_.reset(new haruna::gl::Texture2D());
+			tex_init_result = right_tex_->Init(tex_id, frame->cols, frame->rows);
+		}
+		if(!tex_init_result) {
+			return false;
+		}
 	}
 
 	return true;
 }
 bool Texture2DMapping::Update(float dt)
 {
-    cap >> frame;
-    if( !frame.empty() ) {
-        frame.copyTo(image);
-    }
+	left_cap >> left_frame;
+	right_cap >> right_frame;
 
-    bool luminance = false;
     //캠에서 얻은 정보를 기반으로 텍스쳐 생성 + 내용 갱신하기
-    glBindTexture(GL_TEXTURE_2D, tex_->tex());
-    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, luminance ? GL_LUMINANCE : GL_BGR, GL_UNSIGNED_BYTE, image.data);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, GL_RGB, GL_UNSIGNED_BYTE, image.data);
+    glBindTexture(GL_TEXTURE_2D, left_tex_->tex());
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, left_frame.cols, left_frame.rows, 0, GL_RGB, GL_UNSIGNED_BYTE, left_frame.data);
 
+	glBindTexture(GL_TEXTURE_2D, right_tex_->tex());
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, right_frame.cols, right_frame.rows, 0, GL_RGB, GL_UNSIGNED_BYTE, right_frame.data);
 
 	//y_rot_ += 4.0f * dt;
 	bool running = !glfwGetKey(g_window, GLFW_KEY_ESCAPE) && !glfwWindowShouldClose(g_window);
@@ -121,11 +140,17 @@ void Texture2DMapping::Draw()
 	haruna::gl::ShaderLocation mvp_loc = prog_->GetUniformLocation("u_mvp");
 	haruna::gl::ShaderLocation tex_loc = prog_->GetUniformLocation("s_tex");
 
-    float vertex_data[] = {
+    float left_vertex_data[] = {
 		-1, -1,
+		0, -1,
+		0, 1,
+		-1, 1
+	};
+	float right_vertex_data[] = {
+		0, -1,
 		1, -1,
 		1, 1,
-		-1, 1
+		0, 1
 	};
 	float texcoord_data[] = {
 		0, 1,
@@ -144,14 +169,24 @@ void Texture2DMapping::Draw()
 	glEnableVertexAttribArray(pos_loc.handle());
 	glEnableVertexAttribArray(texcoord_loc.handle());
 
-	//binding texture
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex_->tex());
-	glUniform1i(tex_loc.handle(), 0);
+	{
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, left_tex_->tex());
+		glUniform1i(tex_loc.handle(), 0);
 
-    glVertexAttribPointer(pos_loc, 2, GL_FLOAT, GL_FALSE, 0, vertex_data);
-	glVertexAttribPointer(texcoord_loc, 2, GL_FLOAT, GL_FALSE, 0, texcoord_data);
-	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+		glVertexAttribPointer(pos_loc, 2, GL_FLOAT, GL_FALSE, 0, left_vertex_data);
+		glVertexAttribPointer(texcoord_loc, 2, GL_FLOAT, GL_FALSE, 0, texcoord_data);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	}
+	{
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, right_tex_->tex());
+		glUniform1i(tex_loc.handle(), 0);
+
+		glVertexAttribPointer(pos_loc, 2, GL_FLOAT, GL_FALSE, 0, right_vertex_data);
+		glVertexAttribPointer(texcoord_loc, 2, GL_FLOAT, GL_FALSE, 0, texcoord_data);
+		glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	}
 
 	haruna::gl::GLEnv::CheckError("End Frame");
 }
