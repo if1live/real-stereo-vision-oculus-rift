@@ -67,14 +67,25 @@ Texture2DMapping::Texture2DMapping(float width, float height)
 
 Texture2DMapping::~Texture2DMapping()
 {
-	left_tex_->Deinit();
-	right_tex_->Deinit();
-	prog_->Deinit();
-	fb_->Deinit();
+	if(left_tex_.get() != nullptr) {
+		left_tex_->Deinit();
+	}
+
+	if(right_tex_.get() != nullptr) {
+		right_tex_->Deinit();
+	}
+	if(prog_.get() != nullptr) {
+		prog_->Deinit();
+	}
+	if(fb_.get() != nullptr) {
+		fb_->Deinit();
+	}
 
 	for(auto prog : effect_prog_list_) {
-		prog->Deinit();
-		delete(prog);
+		if(prog != nullptr) {
+			prog->Deinit();
+			delete(prog);
+		}
 	}
 }
 
@@ -125,14 +136,24 @@ bool Texture2DMapping::Init()
 	}
 
     //opencv
-    left_cap.open(0);
-	right_cap.open(1);
 	int frame_width = 640;
 	int frame_height = 480;
-	left_cap.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
-	left_cap.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
-	right_cap.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
-	right_cap.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
+
+    left_cap.open(0);
+	if(left_cap.isOpened()) {
+		left_cap.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
+		left_cap.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
+	}
+	right_cap.open(1);
+	if(right_cap.isOpened()) {
+		right_cap.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
+		right_cap.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
+	}
+
+	if(left_cap.isOpened() == false && right_cap.isOpened() == false) {
+		printf("cam needed\n");
+		return false;
+	}
 
 	//create texture
 	for(int i = 0 ; i < 2 ; ++i) {
