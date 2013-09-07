@@ -1,0 +1,122 @@
+CMAKE_MINIMUM_REQUIRED( VERSION 2.6 )
+PROJECT( "haruna" )
+
+LIST( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake" )
+INCLUDE( pch_support )
+INCLUDE( compiler_option )
+
+if(UNIX)
+	#SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++11" )
+	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -lX11 -lXxf86vm -lpthread -lXrandr -lXi" )
+endif()
+
+OPTION( AUTO_DOWNLOAD_EXT "When needed external library is not found, Automatically download it." OFF )
+OPTION( SUBMODULE_UPDATE "Try to update submodules" ON )
+
+SET( SORA_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sora )
+SET( HARUNA_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/haruna )
+SET( HARUNA_SCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/script )
+SET( HARUNA_EXT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ext )
+SET( HARUNA_EXE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/haruna_exe )
+SET( CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin" )
+
+ADD_DEFINITIONS(-D_USE_MATH_DEFINES )
+
+IF( SUBMODULES_UPDATE )
+	MESSAGE( "Git Submodule update..." )
+	EXECUTE_PROCESS( COMMAND git submodule update --init
+			WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/.. )
+	MESSAGE( "Git Submodule update complete" )
+ENDIF(  )
+
+IF( APPLE )
+	SET( CMAKE_FIND_ROOT_PATH ${CMAKE_OSX_SYSROOT} )
+ENDIF(  )
+
+MACRO( APPEND_LINK_LIBS )
+	LIST( APPEND HARUNA_LINK_LIBS ${ARGN} )
+ENDMACRO( APPEND_LINK_LIBS )
+
+# enable ovr assert
+ADD_DEFINITIONS(-DOVR_BUILD_DEBUG=1)
+
+# Basic Include Path
+INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_SOURCE_DIR} )
+
+#########################################################
+# Add glew
+ADD_SUBDIRECTORY ( ${HARUNA_EXT_DIR}/glew )
+INCLUDE_DIRECTORIES( ${HARUNA_EXT_DIR}/glew/include )
+APPEND_LINK_LIBS( libglew_shared )
+
+# Add glfw
+SET( GLFW_BUILD_EXAMPLES OFF )
+SET( GLFW_BUILD_TESTS OFF  )
+ADD_SUBDIRECTORY ( ${HARUNA_EXT_DIR}/glfw )
+INCLUDE_DIRECTORIES( ${HARUNA_EXT_DIR}/glfw/include )
+APPEND_LINK_LIBS( glfw )
+
+# Add GLM
+INCLUDE_DIRECTORIES( ${HARUNA_EXT_DIR}/glm )
+INCLUDE_DIRECTORIES( ${HARUNA_EXT_DIR}/glm/glm )
+
+#########################################################
+
+IF( APPLE )
+	FIND_LIBRARY( OPENGL_LIB OpenGL )
+	FIND_LIBRARY( COCOA_LIB Cocoa )
+	FIND_LIBRARY( IOKIT_LIB IOKit )
+	APPEND_LINK_LIBS( ${IOKIT_LIB} ${COCOA_LIB} )
+ENDIF(  )
+
+IF( WIN32 )
+	SET( GL_LIBRARY opengl32 )
+ELSEIF( APPLE )
+	FIND_LIBRARY( GL_LIBRARY OpenGL )
+ELSE(  )
+	SET( GL_LIBRARY GL )
+ENDIF(  )
+APPEND_LINK_LIBS( ${GL_LIBRARY} )
+
+#########################################################
+
+FILE( GLOB SORA_SRC_FILES 
+	"${SORA_SRC_DIR}/*.*" )
+FILE( GLOB HARUNA_SRC_FILES "${HARUNA_SRC_DIR}/*.*" )
+FILE( GLOB HARUNA_GL_SRC_FILES "${HARUNA_SRC_DIR}/gl/*.*" )
+
+FILE( GLOB HARUNA_EXE_SRC_FILES "${HARUNA_EXE_DIR}/*.*")
+
+FILE( GLOB PCH_SRC_FILES
+	"${CMAKE_CURRENT_SOURCE_DIR}/stdafx.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/stdafx.cpp" )
+
+#########################################################
+
+ADD_LIBRARY( haruna 
+	${PCH_SRC_FILES}
+	${SORA_SRC_FILES} 	
+	${HARUNA_SRC_FILES} 
+	${HARUNA_GL_SRC_FILES} )
+	
+MSVC_SET_PCH( haruna ${PCH_SRC_FILES} )
+
+SOURCE_GROUP( "" FILES ${PCH_SRC_FILES} )
+SOURCE_GROUP( sora FILES ${SORA_SRC_FILES} )
+SOURCE_GROUP( haruna FILES ${HARUNA_SRC_FILES} )
+SOURCE_GROUP( haruna\\gl FILES ${HARUNA_GL_SRC_FILES} )
+
+#########################################################
+
+ADD_EXECUTABLE( haruna_exe 
+	${HARUNA_EXE_SRC_FILES} )
+	
+SOURCE_GROUP( "" FILES ${HARUNA_EXE_SRC_FILES} )
+
+TARGET_LINK_LIBRARIES( haruna_exe
+	${HARUNA_LINK_LIBS}
+	haruna )
+
+#########################################################
+
+USE_CPP11( TARGET haruna haruna_exe )
