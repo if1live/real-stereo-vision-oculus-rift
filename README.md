@@ -1,12 +1,12 @@
 # Real Stereo Vision with Oculus Rift
 두개의 카메라의 입력을 그대로 Oculus Rift로 보내는 프로그램이다. 캡쳐한 이미지를 후처리하는 것을 구현까지 구현했다.
 
-![no effect](https://raw.github.com/shipduck/haruna/master/document/no_effect.jpg)
-![grayscale](https://raw.github.com/shipduck/haruna/master/document/gray_scale.jpg)
-![sepia](https://raw.github.com/shipduck/haruna/master/document/sepia.jpg)
-![emboss](https://raw.github.com/shipduck/haruna/master/document/emboss.jpg)
-![edge detedtion](https://raw.github.com/shipduck/haruna/master/document/edge_detect.jpg)
-![물체 배치](https://raw.github.com/shipduck/haruna/master/document/object_pos.jpg)
+![no effect](https://raw.github.com/shipduck/real-stereo-vision-oculus-rift/master/document/no_effect.jpg)
+![grayscale](https://raw.github.com/shipduck/real-stereo-vision-oculus-rift/master/document/gray_scale.jpg)
+![sepia](https://raw.github.com/shipduck/real-stereo-vision-oculus-rift/master/document/sepia.jpg)
+![emboss](https://raw.github.com/shipduck/real-stereo-vision-oculus-rift/master/document/emboss.jpg)
+![edge detedtion](https://raw.github.com/shipduck/real-stereo-vision-oculus-rift/master/document/edge_detect.jpg)
+![물체 배치](https://raw.github.com/shipduck/real-stereo-vision-oculus-rift/master/document/object_pos.jpg)
 
 ## 실행 방법
 웹캠을 하나 이상 연결한 상태에서 실행을 적절히 한다. 콘솔에서 f나 w를 선택한다(f=fullscreen, w=window mode). 
