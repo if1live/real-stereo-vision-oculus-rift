@@ -29,6 +29,31 @@ cv::VideoCapture right_cap;
 cv::Mat left_frame;
 cv::Mat right_frame;
 
+struct HMDDescriptor {
+	int m_iResolutionH;
+	int m_iResolutionV;
+	float m_fSizeH;
+	float m_fSizeV;
+	float m_fInterpupillaryDistance;
+	float m_fLensSeparationDistance;
+	float m_fEyeToScreenDistance;
+	float m_fDistortionK[4];
+
+	HMDDescriptor() {
+		m_iResolutionH = 1280;
+		m_iResolutionV = 800;
+		m_fSizeH = 0.14976f;
+		m_fSizeV = 0.0936f;
+		m_fInterpupillaryDistance = 0.064f;
+		m_fLensSeparationDistance = 0.064f;
+		m_fEyeToScreenDistance = 0.041f;
+		m_fDistortionK[0] = 1.0f;
+		m_fDistortionK[1] = 0.22f;
+		m_fDistortionK[2] = 0.24f;
+		m_fDistortionK[3] = 0.0f;
+	}
+};
+
 Texture2DMapping::Texture2DMapping(float width, float height)
 	: AbstractLogic(width, height)
 {
@@ -44,8 +69,9 @@ Texture2DMapping::~Texture2DMapping()
 bool Texture2DMapping::Init()
 {
 	//쉐이더 
-	std::string fs_path = sora::Filesystem::GetAppPath("assets/shader/simple_tex.fs");
 	std::string vs_path = sora::Filesystem::GetAppPath("assets/shader/simple_tex.vs");
+	//std::string fs_path = sora::Filesystem::GetAppPath("assets/shader/simple_tex.fs");
+	std::string fs_path = sora::Filesystem::GetAppPath("assets/shader/stereo.fs");
 	sora::ReadonlyCFile fs_file = sora::ReadonlyCFile(fs_path);
 	sora::ReadonlyCFile vs_file = sora::ReadonlyCFile(vs_path);
 	bool fs_open_result = fs_file.Open();
@@ -72,8 +98,8 @@ bool Texture2DMapping::Init()
     //opencv
     left_cap.open(0);
 	right_cap.open(1);
-	int frame_width = 480;
-	int frame_height = 320;
+	int frame_width = 640;
+	int frame_height = 480;
 	left_cap.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
 	left_cap.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
 	right_cap.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
@@ -140,6 +166,48 @@ void Texture2DMapping::Draw()
 	haruna::gl::ShaderLocation mvp_loc = prog_->GetUniformLocation("u_mvp");
 	haruna::gl::ShaderLocation tex_loc = prog_->GetUniformLocation("s_tex");
 
+	haruna::gl::ShaderLocation scale_loc = prog_->GetUniformLocation("scale");
+	haruna::gl::ShaderLocation scale_in_loc = prog_->GetUniformLocation("scaleIn");
+	haruna::gl::ShaderLocation lens_center_loc = prog_->GetUniformLocation("lensCenter");
+	haruna::gl::ShaderLocation hmd_wrap_param_loc = prog_->GetUniformLocation("hmdWarpParam");
+
+	float m_fScale[2];
+	float m_fScaleIn[2];
+	float m_fLensCenter[2];
+	float m_fHmdWarpParam[4];
+	{
+		//hmd로 연결되는 변수
+
+		// Init shader parameters
+		m_fScale     [0] = 1.0f; m_fScale     [1] = 1.0f;
+		m_fScaleIn   [0] = 1.0f; m_fScaleIn   [1] = 1.0f;
+		m_fLensCenter[0] = 0.0f; m_fLensCenter[1] = 0.0f;
+
+		m_fHmdWarpParam[0] = 1.0f;
+		m_fHmdWarpParam[1] = 0.0f;
+		m_fHmdWarpParam[2] = 0.0f;
+		m_fHmdWarpParam[3] = 0.0f;
+
+		HMDDescriptor m_cHMD;
+
+		// Compute aspect ratio and FOV
+		float l_fAspect    = m_cHMD.m_iResolutionH / (2.0f * m_cHMD.m_iResolutionV);
+		float l_fR         = -1.0f - (4.0f * (m_cHMD.m_fSizeH / 4.0f - m_cHMD.m_fLensSeparationDistance / 2.0f) / m_cHMD.m_fSizeH);
+		float l_fDistScale = (m_cHMD.m_fDistortionK[0] + m_cHMD.m_fDistortionK[1] * pow(l_fR,2) + m_cHMD.m_fDistortionK[2] * pow(l_fR,4) + m_cHMD.m_fDistortionK[3] * pow(l_fR,6));
+		float l_fFov       = 2.0f * atan2(m_cHMD.m_fSizeV * l_fDistScale, 2.0f * m_cHMD.m_fEyeToScreenDistance);
+
+		m_fScale[0] = 1.0f            / l_fDistScale;
+		m_fScale[1] = 1.0f * l_fAspect/ l_fDistScale;
+
+		m_fScaleIn[0] = 1.0f;
+		m_fScaleIn[1] = 1.0f / l_fAspect;
+
+		m_fHmdWarpParam[0] = m_cHMD.m_fDistortionK[0];
+		m_fHmdWarpParam[1] = m_cHMD.m_fDistortionK[1];
+		m_fHmdWarpParam[2] = m_cHMD.m_fDistortionK[2];
+		m_fHmdWarpParam[3] = m_cHMD.m_fDistortionK[3];
+	}
+
     float left_vertex_data[] = {
 		-1, -1,
 		0, -1,
@@ -168,6 +236,12 @@ void Texture2DMapping::Draw()
 	glUniformMatrix4fv(mvp_loc.handle(), 1, GL_FALSE, glm::value_ptr(mvp));
 	glEnableVertexAttribArray(pos_loc.handle());
 	glEnableVertexAttribArray(texcoord_loc.handle());
+
+
+	glUniform2fv(scale_loc.handle(), 1, m_fScale);
+	glUniform2fv(scale_in_loc.handle(), 1, m_fScaleIn);
+	glUniform2fv(lens_center_loc.handle(), 1, m_fLensCenter);
+	glUniform4fv(hmd_wrap_param_loc.handle(), 1, m_fHmdWarpParam);
 
 	{
 		glActiveTexture(GL_TEXTURE0);
