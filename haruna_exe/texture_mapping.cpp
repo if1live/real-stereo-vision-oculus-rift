@@ -18,6 +18,17 @@
 #include "haruna/gl/gl_env.h"
 #include "haruna/primitive_mesh.h"
 
+#include "opencv2/video/tracking.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/highgui/highgui.hpp"
+
+
+//init camera
+cv::VideoCapture cap;
+cv::Mat frame;
+cv::Mat image;
+
+
 Texture2DMapping::Texture2DMapping(float width, float height)
 	: AbstractLogic(width, height), y_rot_(0)
 {
@@ -57,11 +68,27 @@ bool Texture2DMapping::Init()
 		return false;
 	}
 
+    //opencv
+    cap.open(0);
 
 	//create texture
-	std::string tex_path = sora::Filesystem::GetAppPath("assets/texture/glazed_brick_S.png");
-	tex_.reset(new haruna::gl::Texture2D(tex_path));
-	bool tex_init_result = tex_->Init();
+    GLuint tex_id = 0;
+    glGenTextures(1, &tex_id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    cap >> frame;
+    if( !frame.empty() ) {
+        frame.copyTo(image);
+    }
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, GL_RGB, GL_UNSIGNED_BYTE, image.data);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	tex_.reset(new haruna::gl::Texture2D());
+    bool tex_init_result = tex_->Init(tex_id, image.cols, image.rows);
 	if(!tex_init_result) {
 		return false;
 	}
@@ -70,46 +97,48 @@ bool Texture2DMapping::Init()
 }
 bool Texture2DMapping::Update(float dt)
 {
-	y_rot_ += 4.0f * dt;
+    cap >> frame;
+    if( !frame.empty() ) {
+        frame.copyTo(image);
+    }
+
+    bool luminance = false;
+    //캠에서 얻은 정보를 기반으로 텍스쳐 생성 + 내용 갱신하기
+    glBindTexture(GL_TEXTURE_2D, tex_->tex());
+    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, luminance ? GL_LUMINANCE : GL_BGR, GL_UNSIGNED_BYTE, image.data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, GL_RGB, GL_UNSIGNED_BYTE, image.data);
+
+
+	//y_rot_ += 4.0f * dt;
 	bool running = !glfwGetKey(g_window, GLFW_KEY_ESCAPE) && !glfwWindowShouldClose(g_window);
 	return running;
 }
 void Texture2DMapping::Draw()
 {
-	//sample mesh
-	haruna::SolidCubeFactory cube_factory(1, 1, 1);
-	auto data = cube_factory.CreateNormalMesh();
-
-	//haruna::SolidSphereFactory sphere_factory(1, 16, 16);
-	//auto data = sphere_factory.CreateNormalMesh();
-	
 	prog_->Use();
 	haruna::gl::ShaderLocation pos_loc = prog_->GetAttribLocation("a_position");
 	haruna::gl::ShaderLocation texcoord_loc = prog_->GetAttribLocation("a_texcoord");
 	haruna::gl::ShaderLocation mvp_loc = prog_->GetUniformLocation("u_mvp");
 	haruna::gl::ShaderLocation tex_loc = prog_->GetUniformLocation("s_tex");
 
-
-	//projection
-	float aspect = width() / height();
-	glm::mat4 proj_mat = glm::perspective(60.0f, aspect, 0.1f, 100.0f);
-
-	float radius = 2;
-	glm::vec3 eye(cos(y_rot_) * radius, 0, sin(y_rot_) * radius);
-	glm::vec3 center(0, 0, 0);
-	glm::vec3 up(0, 1, 0);
-	glm::mat4 view_mat = glm::lookAt(eye, center, up);
-		
-
-	//model
-	glm::mat4 model_mat = glm::mat4();
-
-	glm::mat4 mvp = proj_mat * view_mat * model_mat;
+    float vertex_data[] = {
+		-1, -1,
+		1, -1,
+		1, 1,
+		-1, 1
+	};
+	float texcoord_data[] = {
+		0, 1,
+		1, 1,
+		1, 0,
+		0, 0
+	};
+	glm::mat4 mvp = glm::mat4();
 
 	//draw
 	glViewport(0, 0, (int)width(), (int)height());
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glEnable(GL_CULL_FACE);
+    glClearColor(0, 0, 0, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	glUniformMatrix4fv(mvp_loc.handle(), 1, GL_FALSE, glm::value_ptr(mvp));
 	glEnableVertexAttribArray(pos_loc.handle());
@@ -120,17 +149,9 @@ void Texture2DMapping::Draw()
 	glBindTexture(GL_TEXTURE_2D, tex_->tex());
 	glUniform1i(tex_loc.handle(), 0);
 
-	for(auto cmd : data) {
-		std::vector<haruna::Vertex_1P1N1UV> &vert_list = cmd.vertex_list;
-		std::vector<unsigned short> &index_list = cmd.index_list;
-
-		int stride = sizeof(haruna::Vertex_1P1N1UV);
-		glVertexAttribPointer(pos_loc.handle(), 3, GL_FLOAT, GL_FALSE, stride, &vert_list[0].p);
-		glVertexAttribPointer(texcoord_loc.handle(), 2, GL_FLOAT, GL_FALSE, stride, &vert_list[0].uv);
-
-		GLenum draw_mode = ToDrawMode(cmd.draw_mode);
-		glDrawElements(draw_mode, index_list.size(), GL_UNSIGNED_SHORT, &index_list[0]);
-	}	
+    glVertexAttribPointer(pos_loc, 2, GL_FLOAT, GL_FALSE, 0, vertex_data);
+	glVertexAttribPointer(texcoord_loc, 2, GL_FLOAT, GL_FALSE, 0, texcoord_data);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
 	haruna::gl::GLEnv::CheckError("End Frame");
 }
