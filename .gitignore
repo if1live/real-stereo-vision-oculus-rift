@@ -42,3 +42,8 @@ Release/*
 
 # unittest
 testdata/*.tmp
+*.xcscheme
+CMakeScripts
+bin
+haruna.build
+haruna.xcodeproj
