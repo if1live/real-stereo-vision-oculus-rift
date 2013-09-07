@@ -38,7 +38,7 @@ GrayScale, Sepia 색 변환은 그 결과물을 봐도 입체감이 느껴지지
 
 1. opencv를 받아서 적절한곳에 압축을 푼다
 2. 루트 권한으로 cmd 실행후
-```sh
+```
 setx -m OpenCV_DIR d:\opencv\build\x86\vc11
 ```
 3. 환경변수 PATH에 ```%OPENCV_DIR%\bin```를 추가한다
